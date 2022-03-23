@@ -1,12 +1,15 @@
 /**
- * Summary. (use period)
+ * Proof of concept for merging/ETL operations in Airtable. 
  *
- * Description. (use period)
+ * This provides a proof of concept for basic ETL/merging operations between tables in a single Airtable base. Base operations are:
+ * Merge/Join
+ * CRUD for record Data
+ * 
  *
  * @link   URL
  * @file   This files defines the MyClass class.
- * @author AuthorName.
- * @since  x.x.x
+ * @author The Gunter Group, attn: andeo@guntergroup.com
+ * @since  3.23.2022
  */
 
  import {useBase, useRecords,  initializeBlock} from '@airtable/blocks/ui';
@@ -16,53 +19,38 @@
  var _ = require('lodash');
  
  
- function joinTables(left_table, right_table, leftKey, rightKey, allFields) {
+ function joinTables(leftTable, rightTable, leftKey, rightKey, allFields) {
  /**
-  * Summary. (use period)
+  * Join two tables given a join key for each.
   *
-  * Description. (use period)
+  * Basic implementation of a join between two tables. This function
+  * leverages alasql for performing the join. For some record level details
+  * additional information is not needed and is filtered out
   *
-  * @since      x.x.x
-  * @deprecated x.x.x Use new_function_name() instead.
-  * @access     private
+  * @since      3.23.2022
+  * @access     public
   *
-  * @class
-  * @augments parent
-  * @mixes    mixin
-  * 
-  * @alias    realName
-  * @memberof namespace
   *
-  * @see  Function/class relied on
-  * @link URL
-  * @global
+  * @param {Object}             leftTable          Left table to join.
+  * @param {Object}             rightTable         Right table to join.
+  * @param {string}             leftKey            Key of left table to use for joining.
+  * @param {string}             rightKey           Key of right table to use for joining.
+  * @param {Array.<string>}     allFields          Array of fields that should exist in the final table.
   *
-  * @fires   eventName
-  * @fires   className#eventName
-  * @listens event:eventName
-  * @listens className~event:eventName
   *
-  * @param {type}   var           Description.
-  * @param {type}   [var]         Description of optional variable.
-  * @param {type}   [var=default] Description of optional variable with default variable.
-  * @param {Object} objectVar     Description.
-  * @param {type}   objectVar.key Description of a key in the objectVar parameter.
-  *
-  * @yield {type} Yielded value description.
-  *
-  * @return {type} Return value description.
+  * @return {Object.<string, (string|number|boolean)} Joined table.
   */    
      var res = alasql(`SELECT * FROM ? left_table \
-         RIGHT JOIN ? right_table ON left_table.[${leftKey}] = right_table.[${rightKey}]`,[left_table, right_table]);
+         RIGHT JOIN ? right_table ON left_table.[${leftKey}] = right_table.[${rightKey}]`,[leftTable, rightTable]);
      
      res.forEach(function(row){
          try {
-             delete row._rightjoin;
+             delete row._rightjoin; // Remove fields annotated during the join
              allFields.forEach(function(field){
                  row[field.name] = row[field.name] || null
              })
          } catch(err) {
-             //not annotated
+             // not annotated, ignore
          }
      })
  
