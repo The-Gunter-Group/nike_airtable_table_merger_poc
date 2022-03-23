@@ -15,7 +15,7 @@ window['_airtableRunBlock'] = function runBlock() {
     }
     didRun = true;
     
-    var blockUrl = "https://localhost:9002";
+    var blockUrl = "https://localhost:9000";
 
     // Make requests to local backend.
     var baseTag = document.createElement('base');
