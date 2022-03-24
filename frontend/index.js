@@ -69,7 +69,7 @@ function joinTables(leftTable, rightTable, leftKey, rightKey, allFields) {
     return res;
 }
 
-function formatJoinableTable(table, recordsRequired=true) {
+async function formatJoinableTable(table, recordsRequired=true) {
 /**
  * Rework airtable object to create a table that can be joined.
  *
@@ -90,9 +90,11 @@ function formatJoinableTable(table, recordsRequired=true) {
  */  
 
     var tempTable = [];
-    var records = useRecords(table);
+    //var records = useRecords(table);
+    const records = table.selectRecords();
+    await records.loadDataAsync();
     var fieldArray = [];
-    records.forEach(function(record){
+    records.records.forEach(function(record){
         var rowMap = {};
         table.fields.forEach(function(field){
             var cells = record.getCellValue(field);
@@ -121,6 +123,7 @@ function formatJoinableTable(table, recordsRequired=true) {
         })
         tempTable.push(rowMap)
     })
+    records.unloadData();
     return {tempTable, fieldArray}
 }
 
@@ -139,7 +142,6 @@ function createTableInDB(table, name) {
  *
  * @return {boolean}  .
  */ 
-
     alasql(`DROP TABLE IF EXISTS table_${name.replace(/\s/g, '')}`)
     alasql(`CREATE TABLE IF NOT EXISTS table_${name.replace(/\s/g, '')}`)
     alasql(`SELECT * INTO table_${name.replace(/\s/g, '')} FROM ?`, [table])
@@ -278,7 +280,6 @@ async function deleteStaleRecordsFromTable(staleRecords, mergeTable, name, base)
         var recordIDs = []
         try {
             staleRecords.resultSet.forEach(function(record) {
-                console.log(mergeTable)
                 var res = _.filter(mergeTable, record)
                 recordIDs.push(res[0]['id'])
             })
@@ -316,7 +317,7 @@ async function checkRecordsForDups(table, merged) {
  *
  * @return {Array.<Object>}  Array of duplicated records
  */ 
-    await sleep(500);
+    await sleep(50);
     if (!table.length) {
         var resultSet = merged
     } else {
@@ -347,7 +348,7 @@ async function findStaleRecords(table, merged) {
  *
  * @return {Array.<Object>}  Array of stale records
  */ 
-    await sleep(500);
+    await sleep(50);
     if (!table.length) {
         var resultSet = merged
     } else {
@@ -360,15 +361,13 @@ var dbFlag = true; // GLOBAL - First time running the app should create the tabl
 var dbSource = true;
 
 
-function teamMerger(teamName, leftSide, leftKey, rightKey, pocBase) {
+async function teamMerger(teamName, leftSide, leftKey, rightKey, pocBase) {
     var mergingTable = pocBase.getTableByNameIfExists(teamName);
     var rightSide = formatJoinableTable(mergingTable, teamName);
-
+    var rightSide = await rightSide;
     if (dbFlag) {
         createTableInDB(rightSide.tempTable, teamName);
     }
-
-
     var all_fields = _.union(leftSide.fieldArray, rightSide.fieldArray)
 
     if (leftSide.tempTable && rightSide.tempTable) {
@@ -380,8 +379,10 @@ function teamMerger(teamName, leftSide, leftKey, rightKey, pocBase) {
             var mergedTable = pocBase.getTableByNameIfExists(name);
             if (mergedTable) {
                 var joinableTable = formatJoinableTable(mergedTable, true);
-                var unmergedRecords = checkRecordsForDups(joinableTable.tempTable, merged);
-                unmergedRecords
+                // var unmergedRecords = checkRecordsForDups(joinableTable.tempTable, merged);
+                joinableTable.then(function(result){
+                    return checkRecordsForDups(result.tempTable, merged)
+                })
                 .then(
                     function(result){
                         insertMergedRecords(result, name, mergedTable, pocBase)
@@ -389,12 +390,15 @@ function teamMerger(teamName, leftSide, leftKey, rightKey, pocBase) {
                 );
                 var mergedTable = pocBase.getTableByNameIfExists(name);
                 var joinableTable = formatJoinableTable(mergedTable, false);
+                var joinableTable = await joinableTable
+                var staleRecords = await findStaleRecords(joinableTable.tempTable, merged)
+
                 var joinableTableWithRecords = formatJoinableTable(mergedTable, true);                
-                var staleRecords = findStaleRecords(joinableTable.tempTable, merged);
-                staleRecords
+                // var staleRecords = findStaleRecords(joinableTable.tempTable, merged);
+                await joinableTableWithRecords
                 .then(
                     function(result){
-                        deleteStaleRecordsFromTable(result, joinableTableWithRecords.tempTable, name, pocBase)
+                        deleteStaleRecordsFromTable(staleRecords, result.tempTable, name, pocBase)
                     }
                 );               
             }
@@ -419,16 +423,18 @@ function NikeAirtableMergerApp() {
 
 
     var table = pocBase.getTableByNameIfExists('Source Data');
-    var leftSide = formatJoinableTable(table, 'source');
-    if (dbSource) {
-        createTableInDB(leftSide.tempTable, 'source');
-        dbSource = false
-    }
+    var leftSide = formatJoinableTable(table);
+    var leftSide_res = leftSide.then(function(result) {
+        if (dbSource) {
+            createTableInDB(result.tempTable, 'source')
+            dbSource = false
+        }
+        teamMerger(teams[0], result, leftKey, rightKey, pocBase)
+        teamMerger(teams[1], result, leftKey, rightKey, pocBase)
+        return result
+    })
 
-    teamMerger(teams[0], leftSide, leftKey, rightKey, pocBase)
-    teamMerger(teams[1], leftSide, leftKey, rightKey, pocBase)
-
-    dbFlag = false;
+    dbFlag = true;
     return <div>Hello Nike 🚀</div>;
 }
 
