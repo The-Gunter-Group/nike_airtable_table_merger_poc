@@ -379,7 +379,6 @@ async function teamMerger(teamName, leftSide, leftKey, rightKey, pocBase) {
             var mergedTable = pocBase.getTableByNameIfExists(name);
             if (mergedTable) {
                 var joinableTable = formatJoinableTable(mergedTable, true);
-                // var unmergedRecords = checkRecordsForDups(joinableTable.tempTable, merged);
                 joinableTable.then(function(result){
                     return checkRecordsForDups(result.tempTable, merged)
                 })
@@ -394,7 +393,6 @@ async function teamMerger(teamName, leftSide, leftKey, rightKey, pocBase) {
                 var staleRecords = await findStaleRecords(joinableTable.tempTable, merged)
 
                 var joinableTableWithRecords = formatJoinableTable(mergedTable, true);                
-                // var staleRecords = findStaleRecords(joinableTable.tempTable, merged);
                 await joinableTableWithRecords
                 .then(
                     function(result){
@@ -429,6 +427,13 @@ function NikeAirtableMergerApp() {
             createTableInDB(result.tempTable, 'source')
             dbSource = false
         }
+
+        // TODO: On first load double records are being loaded for the first team
+        // then don't get captured by the stale records process. Manually deleting
+        // these records in airtable works for now, but exploration required to 
+        // fix. It seems related to the React hook for getting records and then 
+        // immediately writing them to airtable, causing the hook to send another
+        // request.
         teamMerger(teams[0], result, leftKey, rightKey, pocBase)
         teamMerger(teams[1], result, leftKey, rightKey, pocBase)
         return result
